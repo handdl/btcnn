@@ -1,13 +1,16 @@
+[![codecov](https://codecov.io/gh/handdl/btcnn/graph/badge.svg?token=GCC9XW04VB)](https://codecov.io/gh/handdl/btcnn)
+
 **`TL;DR`** 
 torch-like implementation of convolutional layer blocks over binary trees
 
 
-# 💡 Idea - image < binary tree < graph
+# 💡 Idea
 
 Convolution over binary tries lies _between_ conventional CNNs used for images and graph-based CNNs. The constraint that each node in the binary tree has at most two neighbors
 allows the data to be formatted in a way that a 1-dim CNN can efficiently process while considering the tree’s structure. Such layers allows the structure of trees to be taken into account when encoding them, which simplifies the task of modelling dependency on them.
 
 # 📦 Setup
+
 ```bash
 python -m pip install --upgrade pip
 python3 -v venv venv
@@ -21,6 +24,47 @@ pytest --cov=. --cov-report=term-missing
 
 # 🚀 How To
 
+```python3
+
+dataloader = DataLoader(
+    dataset=WeightedBinaryTreeDataset(
+        list_vertices, list_edges, list_times, device
+    ),
+    batch_size=batch_size,
+    shuffle=True,
+    collate_fn=lambda el: weighted_binary_tree_collate(el, 10),
+    drop_last=False,
+)
+
+
+model = BinaryTreeRegressor(
+    btcnn=BinaryTreeSequential(
+        BinaryTreeConv(in_channels, out_channels),
+        BinaryTreeInstanceNorm(128),
+        BinaryTreeActivation(torch.nn.functional.leaky_relu),
+        BinaryTreeAdaptivePooling(torch.nn.AdaptiveMaxPool1d(1))
+    ),
+    fcnn=nn.Sequential(
+        nn.Linear(128, 1),
+        nn.Softplus(),
+    ),
+    name="SimpleBTCNNRegressor",
+    device=device,
+)
+optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=20)
+weighted_train_loop(
+    model=model,
+    optimizer=optimizer,
+    criterion=nn.MSELoss(reduction="none"),
+    scheduler=scheduler,
+    train_dataloader=dataloader,
+    num_epochs=epochs,
+    ckpt_period=epochs,
+    path_to_save=f"/tmp/{model.name}.pth",
+)
+```
+
 # 🧩 Interface
 
 <details>
@@ -30,7 +74,7 @@ Our layers process objects using the following representation:
 - `vertices` - 3D tensor of shape `[batch_size, n_channels, max_length_in_batch]`
 - `edges` - 4D tensor of shape `[batch_size, 1, max_length_in_batch, 3]`, where the last dimension contains three indices representing the node’s 1-hop neighborhood (`[parent_id, left_child_id, right_child_id]`)
 
-```python
+```python3
 def forward(self, vertices: "Tensor", edges: "Tensor") -> "Tensor":
     ...
 ```
@@ -63,11 +107,13 @@ By combining CNN block with FCNN, it is possible to solve prediction problems. I
 is broken down into two parts - encoding into a vector taking into account the tree structure (`btcnn` part), and then running a fully-connected network (`fcnn` part). 
 This is put together in the `BinaryTreeRegressor` module:
 
-```python
+```python3
 class BinaryTreeRegressor(nn.Module):
     def forward(self, vertices: "Tensor", edges: "Tensor") -> "Tensor":
         return self.fcnn(self.btcnn(vertices=vertices, edges=edges))
 ```
+
+
 
 </details>
 
@@ -80,7 +126,9 @@ That the proposed convolutions are able to extract useful features can be verifi
 
 # 🔢 Pipeline
 
-**Step 1. Vectorize the binary tree.**
+<details>
+  <summary><strong>Step 1. Vectorize the binary tree.</strong></summary>
+
 ```python3
                 [1.0, 1.0]
                  /       \
@@ -89,7 +137,11 @@ That the proposed convolutions are able to extract useful features can be verifi
   [-1.0, -1.0]   [1.0, 1.0]
 ```
 
-**Step 2. Add padding nodes for all incomplited nodes.**
+</details>
+
+<details>
+  <summary><strong>Step 2. Add padding nodes for all incomplited nodes.</strong></summary>
+  
 ```python3
                 [1.0, 1.0]
                  /       \
@@ -97,9 +149,13 @@ That the proposed convolutions are able to extract useful features can be verifi
             /    \                 
   [-1.0, -1.0]   [1.0, 1.0]
 ```
+  
+</details>
+  
 
-**Step 3. Construct tensors for `vertices` and `edges` using a left-first preorder traversal.**
-
+<details>
+  <summary><strong>Step 3. Construct tensors for `vertices` and `edges` using a left-first preorder traversal.</strong></summary>
+  
 ```python3
 # vertices 
 [[0, 0], [1.0, 1.0], [1.0, -1.0], [-1.0, -1.0], [1.0, 1.0]]
@@ -107,7 +163,12 @@ That the proposed convolutions are able to extract useful features can be verifi
 [[1, 2, 0], [2, 3, 4], [3, 0, 0], [4, 0, 0]]
 ```
 
-**Step 4. Convolve over the binary tree neighborhoods.**
+</details>
+
+
+<details>
+  <summary><strong>Step 4. Convolve over the binary tree neighborhoods.</strong></summary>
+  
 To account for the binary tree structure, we’ll convolve over the parent, left child, and right child nodes. This can be visualized as a filter moving across the tree structure:
 
 ```python3
@@ -119,7 +180,11 @@ To account for the binary tree structure, we’ll convolve over the parent, left
 **🪄 Trick:** the knowledge that each node has either zero or two children allows us to stretch the entire tree into a tensor of size `3 * tree_length`, a one-dimensional CNN with a 
 `stride=3` can then capture the tree’s neighborhood, leveraging efficient convolution implementations while maintaining the tree’s geometry.
 
-**Step 5. Apply Adaptive Pooling.** 
+</details>
+
+<details>
+  <summary><strong>Step 5. Apply Adaptive Pooling.</strong></summary>
+  
 After applying several convolutional layers (along with point-wise non-linear functions and normalization layers), we can use a adaptive pooling method to reduce the tree to a _fixed-size_ vector.
 
 ```python3
@@ -132,6 +197,8 @@ After applying several convolutional layers (along with point-wise non-linear fu
 # After `AdaptiveMaxPooling` layer, the tree becomes a vector which size is equal to the number of channels in the tree
 vector = [max(a, b, c, d, e), max(e, f, g, h, k)]
 ```
+</details>
+
 
 # Normalisation Layers
 
@@ -205,34 +272,13 @@ Let's considere convolution of the next tree with the next filter
 [-1.0,-1.0]   [1.0,1.0]
 ```
 
-First, a convolution with the filter will be performed independently for each neighbourhood
-
-**root:**
+First, a convolution with the filter will be performed independently for each neighbourhood. An example of neighbourhood convolution on the root:
 ```python3
 # root
                 [1.0,1.0]                [1.0,-1.0]
                  /     \        *         /      \            =      [0.0]
         [1.0,-1.0]   [0.0,0.0]    [-1.0,-1.0]   [1.0,1.0]
 # (1.0 * 1.0 + 1.0 * -1.0) + (1.0 * -1.0 + -1.0 * -1.0) + (0.0 * 1.0 + 0.0 * 1.0) = 0.0
-```
-**left child of the root:**
-```python3
-                [1.0,-1.0]               [1.0,-1.0]
-                 /     \        *         /      \            =      [6.0]
-        [-1.0,-1.0]   [1.0,1.0]    [-1.0,-1.0]   [1.0,1.0]
-# (1.0 * 1.0 + -1.0 * -1.0) + (-1.0 * -1.0 + -1.0 * -1.0) + (1.0 * 1.0 + 1.0 * 1.0) = 6.0
-
-# left child of the left child of the root
-                [-1.0,-1.0]                [1.0,-1.0]
-                 /     \        *           /      \            =      [0.0]
-        [0.0,0.0]   [0.0,0.0]       [-1.0,-1.0]   [1.0,1.0]
-# (-1.0 * 1.0 + -1.0 * -1.0) + (0.0 * -1.0 + 0.0 * -1.0) + (0.0 * 1.0 + 0.0 * 1.0) = 0.0
-
-# right child of the left child of the root
-                [1.0,1.0]                 [1.0,-1.0]
-                 /     \        *          /      \            =      [0.0]
-        [0.0,0.0]   [0.0,0.0]      [-1.0,-1.0]   [1.0,1.0]
-# (1.0 * 1.0 + 1.0 * -1.0) + (0.0 * -1.0 + 0.0 * -1.0) + (0.0 * 1.0 + 0.0 * 1.0) = 0.0
 ```
 
 Normalisation and activation layers are then applied. Given a structure over the vertices, the following happens to the tree:
