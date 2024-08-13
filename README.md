@@ -8,8 +8,8 @@ allows the data to be formatted in a way that a one-dimensional CNN can efficien
 # Interface
 
 **Layer.** Our layers process the next structures:
-- `vertices` - 3D tensor of shape `[batch_size, n_channels, batch_length]`
-- `edges` - 4D tensor of shape `[batch_size, 1, batch_length, 3]`, where the last dimension contains three indices representing the node’s 1-hop neighborhood (`[parent_id, left_child_id, right_child_id]`)
+- `vertices` - 3D tensor of shape `[batch_size, n_channels, max_length_in_batch]`
+- `edges` - 4D tensor of shape `[batch_size, 1, max_length_in_batch, 3]`, where the last dimension contains three indices representing the node’s 1-hop neighborhood (`[parent_id, left_child_id, right_child_id]`)
 
 ```python3
 def forward(self, vertices: "Tensor", edges: "Tensor") -> "Tensor":
@@ -21,7 +21,7 @@ _P.S. To work with this format, zero padding is used to handle a) missing childr
 **Stacking.** Since layers working with the tree must always remember the structure behind the `vertices` (which is stored in `edges`), we decided to build our own module for layer stacking `BinaryTreeSequential`:
 
 ```python3
-class BinaryTreeSequential(nn.Module)
+class BinaryTreeSequential(nn.Module):
     def forward(self, vertices: "Tensor", edges: "Tensor") -> "Tensor":
         for layer in self.layers:
             vertices = layer(vertices, edges)
