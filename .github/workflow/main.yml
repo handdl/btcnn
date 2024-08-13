@@ -1,0 +1,41 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: installing python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.12'
+
+    - name: installing dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: formatting
+      run: |
+        black --check --line-length 120 .
+
+    - name: type checking
+      run: |
+        mypy .
+
+    - name: linting
+      run: |
+        find . -name "*.py" | xargs pylint
+
+    - name: testing
+      run: | 
+        pytest --cov=. --cov-report=xml
+
+    - name: uploading coverage badge
+      uses: codecov/codecov-action@v4.0.1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}    
