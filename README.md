@@ -12,12 +12,8 @@ allows the data to be formatted in a way that a 1-dim CNN can efficiently proces
 python -m pip install --upgrade pip
 python3 -v venv venv
 source venv/bin/activate
-# data?
 pip install -r requirements.txt
-sudo apt-get install -y p7zip-full
-7za x data/raw/raw_data.7z -odata/raw
-python3 process_raw_data.py
-pytest || [ $? -eq 5 ]
+pytest --cov=. --cov-report=term-missing
 ```
 
 
