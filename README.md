@@ -1,13 +1,20 @@
 [![codecov](https://codecov.io/gh/handdl/btcnn/graph/badge.svg?token=GCC9XW04VB)](https://codecov.io/gh/handdl/btcnn)
 
 **`TL;DR`** 
-torch-like implementation of convolutional layer blocks over binary trees
+torch-like implementation of convolutional layer blocks over binary trees; can be used to efficiently encode trees 
 
 
 # 💡 Idea
 
 Convolution over binary tries lies _between_ conventional CNNs used for images and graph-based CNNs. The constraint that each node in the binary tree has at most two neighbors
 allows the data to be formatted in a way that a 1-dim CNN can efficiently process while considering the tree’s structure. Such layers allows the structure of trees to be taken into account when encoding them, which simplifies the task of modelling dependency on them.
+
+# 🧐 Why is BinaryTreeConvolution useful? 
+
+That the proposed convolutions are able to extract useful features can be verified by direct comparison. On the task of predicting the execution time of requests based on their plans, we can observe the following pattern - `BTCNN` extension makes the dependency approximation problem for `FCNN` easier.
+
+<img src="https://github.com/handdl/btcnn/blob/main/losses.svg" alt="image" width="800"/>
+
 
 # 📦 Setup
 
@@ -19,51 +26,11 @@ pip install -r requirements.txt
 pytest --cov=. --cov-report=term-missing
 ```
 
-
-# 🗂️ Data Structure 
-
 # 🚀 How To
 
-```python3
+How to create a `Dataset` / `DataLoader`, configure the architecture, run training and manage trained models is demonstrated in the notebook.
 
-dataloader = DataLoader(
-    dataset=WeightedBinaryTreeDataset(
-        list_vertices, list_edges, list_times, device
-    ),
-    batch_size=batch_size,
-    shuffle=True,
-    collate_fn=lambda el: weighted_binary_tree_collate(el, 10),
-    drop_last=False,
-)
-
-
-model = BinaryTreeRegressor(
-    btcnn=BinaryTreeSequential(
-        BinaryTreeConv(in_channels, out_channels),
-        BinaryTreeInstanceNorm(128),
-        BinaryTreeActivation(torch.nn.functional.leaky_relu),
-        BinaryTreeAdaptivePooling(torch.nn.AdaptiveMaxPool1d(1))
-    ),
-    fcnn=nn.Sequential(
-        nn.Linear(128, 1),
-        nn.Softplus(),
-    ),
-    name="SimpleBTCNNRegressor",
-    device=device,
-)
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=20)
-weighted_train_loop(
-    model=model,
-    optimizer=optimizer,
-    criterion=nn.MSELoss(reduction="none"),
-    scheduler=scheduler,
-    train_dataloader=dataloader,
-    num_epochs=epochs,
-    ckpt_period=epochs,
-    path_to_save=f"/tmp/{model.name}.pth",
-)
-```
+[![example.ipynb](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/handdl/btcnn/blob/main/example.ipynb)
 
 # 🧩 Interface
 
@@ -117,12 +84,6 @@ class BinaryTreeRegressor(nn.Module):
 
 </details>
 
-# 🧐 Why is it useful? 
-
-That the proposed convolutions are able to extract useful features can be verified by direct comparison. On the task of predicting the execution time of requests based on their plans, we can observe the following pattern - `BTCNN` extension makes the dependency approximation problem for `FCNN` easier.
-
-<img src="https://github.com/user-attachments/assets/34a8c1a1-ca12-4472-a91e-1141394880fe" alt="image" width="600"/>
-
 
 # 🔢 Pipeline
 
@@ -154,11 +115,12 @@ That the proposed convolutions are able to extract useful features can be verifi
   
 
 <details>
-  <summary><strong>Step 3. Construct tensors for `vertices` and `edges` using a left-first preorder traversal.</strong></summary>
+  <summary><strong>Step 3. Construct tensors for <code>vertices</code> and <code>edges</code> using a tree traversal.</strong></summary>
   
 ```python3
 # vertices 
 [[0, 0], [1.0, 1.0], [1.0, -1.0], [-1.0, -1.0], [1.0, 1.0]]
+
 # edges in the form `[node_id, left_child_id, right_child_id]`
 [[1, 2, 0], [2, 3, 4], [3, 0, 0], [4, 0, 0]]
 ```
@@ -183,7 +145,7 @@ To account for the binary tree structure, we’ll convolve over the parent, left
 </details>
 
 <details>
-  <summary><strong>Step 5. Apply Adaptive Pooling.</strong></summary>
+  <summary><strong>Step 5. Apply point-wise Activation and Adaptive Pooling.</strong></summary>
   
 After applying several convolutional layers (along with point-wise non-linear functions and normalization layers), we can use a adaptive pooling method to reduce the tree to a _fixed-size_ vector.
 
@@ -194,20 +156,28 @@ After applying several convolutional layers (along with point-wise non-linear fu
              /  \                 
         [c, g]  [d, h]
 
-# After `AdaptiveMaxPooling` layer, the tree becomes a vector which size is equal to the number of channels in the tree
+# after `AdaptiveMaxPooling` layer, the tree becomes a vector which size is equal to the number of channels in the tree
 vector = [max(a, b, c, d, e), max(e, f, g, h, k)]
 ```
 </details>
 
 
-# Normalisation Layers
+# Normalisation Layer
 
 To simplify the optimisation problem, it is useful to use normalisation layers within the convolution blocks. 
+Among all the options tried by us, `InstanceNormalisation` worked best of all.
 
-## Batch Normalisation (inappropriate)
+<img src="https://github.com/handdl/btcnn/blob/main/normalisations.svg" alt="image" width="800"/>
 
-Aggregation is performed across all trees in the batch.
 
+<details>
+    
+<summary><b>Descriptions</b></summary>
+
+<br>
+
+**Batch Normalisation.** Aggregation is performed across all trees in the batch.
+    
 ```python3
                [10000]                       [100]
                /     \                      /     \
@@ -225,10 +195,8 @@ batch_vertices_mean = mean(batch_vertices)  # [5050, 105, 101, 7.5, 10, 5, 5]
 
 The Batch Normalisation does not suit us in a similar way to any NN over sequence reason - objects in a batch may have representations responsible for completely different information at the same position. As a result, aggregation by objects in the batches will lead to the fact that we will mix, for example, statistics of tree roots of different heights (which, given the semantics of statistics, is _inappropriate_ - characteristic orders of magnitude of cardinalities grow with tree height). 
 
-
-## Layer Normalisation (good)
-Aggregation is performed independently for each tree.
-
+**Layer Normalisation.** Aggregation is performed independently for each tree.
+    
 ```python3
                 [1.0,1.0]
                  /     \
@@ -240,9 +208,8 @@ tree_mean = mean([1.0, 1.0, 1.0, -1.0, -1.0, -1.0, 1.0, 1.0])  # 0.25
 tree_std = std([1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0, 1.,0 0., 0.])  # 0.9682458365518543
 ```
 
-## Instance Normalisation (best)
-Aggregation is performed independently for each tree and each channel.
-
+**Instance Normalisation.** Aggregation is performed independently for each tree and each channel.
+    
 ```python3
                 [1.0,1.0]
                  /     \
@@ -254,9 +221,18 @@ tree_mean = [mean([1.0, 1.0, -1.0, 1.0]), mean([1.0, -1.0, -1.0, 1.0])]  # [0.5,
 tree_std = [std([1.0, 1.0, -1.0, 1.0]),  std([1.0, -1.0, -1.0, 1.0])]  # [0.8660254037844386, 1.0]
 ```
 
-# 📝 Example
+</details>
 
-Let's considere convolution of the next tree with the next filter
+
+# 📝 Completed Example
+
+
+<details>
+<summary><b>Click on me if you're not afraid</b></summary>
+
+<br>
+
+<b>First</b>, a convolution with the filter is performed independently for each neighbourhood. An example of neighbourhood convolution on the root:
 
 ```python3
 # tree
@@ -270,18 +246,16 @@ Let's considere convolution of the next tree with the next filter
        [1.0,-1.0]
          /      \
 [-1.0,-1.0]   [1.0,1.0]
-```
 
-First, a convolution with the filter will be performed independently for each neighbourhood. An example of neighbourhood convolution on the root:
-```python3
-# root
+# root's neighborhood convolution
                 [1.0,1.0]                [1.0,-1.0]
                  /     \        *         /      \            =      [0.0]
         [1.0,-1.0]   [0.0,0.0]    [-1.0,-1.0]   [1.0,1.0]
 # (1.0 * 1.0 + 1.0 * -1.0) + (1.0 * -1.0 + -1.0 * -1.0) + (0.0 * 1.0 + 0.0 * 1.0) = 0.0
 ```
 
-Normalisation and activation layers are then applied. Given a structure over the vertices, the following happens to the tree:
+<b>In second</b>, normalisation and activation layers are applied. <b>In third</b>, dynamic pooling layer maps tree to fixed-length vector. 
+Considering the structure of the tree, the following happens to the tree throughout the process:
 
 ```python3
                  # tree                  # filter                # after Conv            # after Norm & ReLU    # after AdaptiveMaxPooling
@@ -293,4 +267,4 @@ Normalisation and activation layers are then applied. Given a structure over the
  [-1.0,-1.0]   [1.0,1.0]                                     [0.0]   [0.0]              [0.0]  [0.0]
 ```
 
-After normalising and applying the `ReLU` activation, we see that the value of the left child of the root _stands out_ - and this is expected, because the values of its neighborhood are same to the filter weights. In fact, this value indicates how similar to the filter the substructure pattern was found in the tree. When we train several filters at once, and combine convolutional blocks at the same time, we start learning more filters with more complex structure - subtrees of height 2, 3 and so on are considered. 
+**👁️⃤ Intuition.** After normalizing and applying the ReLU activation, the left child of the root becomes prominent. This happens because its values closely match the filter weights. This prominence indicates the similarity of the substructure to the filter. When training multiple filters simultaneously and combining convolutional blocks, we begin to capture more complex structures, such as subtrees of height 2, 3, and beyond. `BTCNN` effectively identifies key substructures in the tree, and then a `FCNN` assesses their presence.
