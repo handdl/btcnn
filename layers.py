@@ -109,7 +109,6 @@ class BinaryTreeSequential(nn.Module):
 
 
 class BinaryTreeLayerNorm(nn.Module):
-
     def __init__(self, in_channels: "int", eps: "float" = 1e-5, frozen: "bool" = False):
         super().__init__()
         self.in_channels = in_channels
@@ -131,7 +130,6 @@ class BinaryTreeLayerNorm(nn.Module):
 
 
 class BinaryTreeInstanceNorm(nn.Module):
-
     def __init__(self, in_channels: "int", eps: "float" = 1e-5, frozen: "bool" = False):
         super().__init__()
         self.in_channels = in_channels
