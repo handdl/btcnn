@@ -22,7 +22,7 @@ That the proposed convolutions are able to extract useful features can be verifi
 python -m pip install --upgrade pip
 python3 -v venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 pytest --cov=. --cov-report=term-missing
 ```
 
