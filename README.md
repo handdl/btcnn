@@ -30,7 +30,7 @@ pytest --cov=. --cov-report=term-missing
 
 How to create a `Dataset` / `DataLoader`, configure the architecture, run training and manage trained models is demonstrated in the notebook.
 
-[![example.ipynb](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/handdl/btcnn/blob/main/example.ipynb)
+[![example.ipynb](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/handdl/btcnn/blob/main/src/btcnn/example.ipynb)
 
 # 🧩 Interface
 
