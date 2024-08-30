@@ -1,6 +1,6 @@
 import torch
 from torch import nn, Tensor
-from layers import BinaryTreeSequential
+from btcnn.layers import BinaryTreeSequential
 
 
 class BinaryTreeRegressor(nn.Module):

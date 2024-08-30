@@ -1,5 +1,5 @@
 import pytest
-from layers import (
+from btcnn.layers import (
     BinaryTreeActivation,
     BinaryTreeAdaptivePooling,
     BinaryTreeSequential,
@@ -10,7 +10,7 @@ from layers import (
     NEIGHBORHOOD_SIZE,
     _check_shapes,
 )
-from regressor import BinaryTreeRegressor
+from btcnn.regressor import BinaryTreeRegressor
 import torch
 from torch import Tensor, nn
 
