@@ -34,7 +34,7 @@ jobs:
 
     - name: testing
       run: | 
-        pytest --cov=. --cov-report=xml --cov-omit="setup.py"
+        pytest --cov=. --cov-report=xml
 
     - name: uploading coverage badge
       uses: codecov/codecov-action@v4.0.1
