@@ -1,19 +1,16 @@
 [![codecov](https://codecov.io/gh/handdl/btcnn/graph/badge.svg?token=GCC9XW04VB)](https://codecov.io/gh/handdl/btcnn)
 
-**`TL;DR`** 
-torch-like implementation of convolutional layer blocks over binary trees; can be used to efficiently encode trees 
+**`TL;DR`**  A PyTorch-like implementation of 1-D convolutional layers for binary trees, designed for efficient hierarchical data encoding.
 
+**⚡ Key Features:**
+- Efficiently encodes hierarchical structures using 1-D tree convolutions
+- Seamless integration with PyTorch, making it easy to use and extend
+- Modular design for flexible customization and quick experimentation
+- Custom `InstanceNormalization` layer for improved performance
 
-# 💡 Idea
+# 💡 Concept
 
-Convolution over binary tries lies _between_ conventional CNNs used for images and graph-based CNNs. The constraint that each node in the binary tree has at most two neighbors
-allows the data to be formatted in a way that a 1-dim CNN can efficiently process while considering the tree’s structure. Such layers allows the structure of trees to be taken into account when encoding them, which simplifies the task of modelling dependency on them.
-
-# 🧐 Why is BinaryTreeConvolution useful? 
-
-That the proposed convolutions are able to extract useful features can be verified by direct comparison. On the task of predicting the execution time of requests based on their plans, we can observe the following pattern - `BTCNN` extension makes the dependency approximation problem for `FCNN` easier.
-
-<img src="https://github.com/handdl/btcnn/blob/main/losses.svg" alt="image" width="800"/>
+Binary Tree Convolutional Neural Networks (BTCNNs) use specialized 1-D convolutions tailored for binary trees, inspired by graph convolutional networks. This method leverages the natural binary tree structure, where nodes have at most two children, to apply efficient convolution techniques from image processing. By respecting the inherent geometry of tree data, BTCNNs can generalize effectively and produce richer, more meaningful representations.
 
 
 # 📦 Setup
@@ -161,76 +158,8 @@ vector = [max(a, b, c, d, e), max(e, f, g, h, k)]
 ```
 </details>
 
-
-# Normalisation Layer
-
-To simplify the optimisation problem, it is useful to use normalisation layers within the convolution blocks. 
-Among all the options tried by us, `InstanceNormalisation` worked best of all.
-
-<img src="https://github.com/handdl/btcnn/blob/main/normalisations.svg" alt="image" width="800"/>
-
-
 <details>
-    
-<summary><b>Descriptions</b></summary>
-
-<br>
-
-**Batch Normalisation.** Aggregation is performed across all trees in the batch.
-    
-```python3
-               [10000]                       [100]
-               /     \                      /     \
-            [100]   [100]               [10]     [10]
-            /  \     /  \               /  \     
-         [10] [10] [10] [10],        [2]   [5] 
-
-batch_vertices = [
-    [[.0], [10000], [100], [100], [10], [10], [10], [10]],
-    [[.0], [100],   [10],  [2],   [5],  [10], [.0], [.0]],
-]
-batch_edges = [[[1,2,5], [2,3,4], [3,0,0], [4,0,0], [5,0,0]]]
-batch_vertices_mean = mean(batch_vertices)  # [5050, 105, 101, 7.5, 10, 5, 5]
-```
-
-The Batch Normalisation does not suit us in a similar way to any NN over sequence reason - objects in a batch may have representations responsible for completely different information at the same position. As a result, aggregation by objects in the batches will lead to the fact that we will mix, for example, statistics of tree roots of different heights (which, given the semantics of statistics, is _inappropriate_ - characteristic orders of magnitude of cardinalities grow with tree height). 
-
-**Layer Normalisation.** Aggregation is performed independently for each tree.
-    
-```python3
-                [1.0,1.0]
-                 /     \
-        [1.0, -1.0]   *None*
-            /  \                 
- [-1.0,-1.0]   [1.0,1.0]
-
-tree_mean = mean([1.0, 1.0, 1.0, -1.0, -1.0, -1.0, 1.0, 1.0])  # 0.25
-tree_std = std([1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0, 1.,0 0., 0.])  # 0.9682458365518543
-```
-
-**Instance Normalisation.** Aggregation is performed independently for each tree and each channel.
-    
-```python3
-                [1.0,1.0]
-                 /     \
-        [1.0, -1.0]   *None*
-            /  \                 
- [-1.0,-1.0]   [1.0,1.0]
-
-tree_mean = [mean([1.0, 1.0, -1.0, 1.0]), mean([1.0, -1.0, -1.0, 1.0])]  # [0.5, .0]
-tree_std = [std([1.0, 1.0, -1.0, 1.0]),  std([1.0, -1.0, -1.0, 1.0])]  # [0.8660254037844386, 1.0]
-```
-
-</details>
-
-
-# 📝 Completed Example
-
-
-<details>
-<summary><b>Click on me if you're not afraid</b></summary>
-
-<br>
+<summary><b> 🔥 Putting It All Together </b></summary>
 
 <b>First</b>, a convolution with the filter is performed independently for each neighbourhood. An example of neighbourhood convolution on the root:
 
@@ -254,7 +183,7 @@ tree_std = [std([1.0, 1.0, -1.0, 1.0]),  std([1.0, -1.0, -1.0, 1.0])]  # [0.8660
 # (1.0 * 1.0 + 1.0 * -1.0) + (1.0 * -1.0 + -1.0 * -1.0) + (0.0 * 1.0 + 0.0 * 1.0) = 0.0
 ```
 
-<b>In second</b>, normalisation and activation layers are applied. <b>In third</b>, dynamic pooling layer maps tree to fixed-length vector. 
+<b>In second</b>, normalization and activation layers are applied. <b>In third</b>, dynamic pooling layer maps tree to fixed-length vector. 
 Considering the structure of the tree, the following happens to the tree throughout the process:
 
 ```python3
@@ -268,3 +197,68 @@ Considering the structure of the tree, the following happens to the tree through
 ```
 
 **👁️⃤ Intuition.** After normalizing and applying the ReLU activation, the left child of the root becomes prominent. This happens because its values closely match the filter weights. This prominence indicates the similarity of the substructure to the filter. When training multiple filters simultaneously and combining convolutional blocks, we begin to capture more complex structures, such as subtrees of height 2, 3, and beyond. `BTCNN` effectively identifies key substructures in the tree, and then a `FCNN` assesses their presence.
+
+</details>
+
+# ✨ [new] Normalization Layer
+
+To simplify the optimisation problem, it is useful to use normalization layers within the convolution blocks. 
+Among all the options tried by us, `InstanceNormalization` worked best of all.
+
+<details>
+    
+<summary><b>Descriptions</b></summary>
+
+<br>
+
+**Batch Normalization.** Aggregation is performed across all trees in the batch.
+    
+```python3
+               [10000]                       [100]
+               /     \                      /     \
+            [100]   [100]               [10]     [10]
+            /  \     /  \               /  \     
+         [10] [10] [10] [10],        [2]   [5] 
+
+batch_vertices = [
+    [[.0], [10000], [100], [100], [10], [10], [10], [10]],
+    [[.0], [100],   [10],  [2],   [5],  [10], [.0], [.0]],
+]
+batch_edges = [[[1,2,5], [2,3,4], [3,0,0], [4,0,0], [5,0,0]]]
+batch_vertices_mean = mean(batch_vertices)  # [5050, 105, 101, 7.5, 10, 5, 5]
+```
+
+The Batch Normalization does not suit us in a similar way to any NN over sequence reason - objects in a batch may have representations responsible for completely different information at the same position. As a result, aggregation by objects in the batches will lead to the fact that we will mix, for example, statistics of tree roots of different heights (which, given the semantics of statistics, is _inappropriate_ - characteristic orders of magnitude of cardinalities grow with tree height). 
+
+**Layer Normalization.** Aggregation is performed independently for each tree.
+    
+```python3
+                [1.0,1.0]
+                 /     \
+        [1.0, -1.0]   *None*
+            /  \                 
+ [-1.0,-1.0]   [1.0,1.0]
+
+tree_mean = mean([1.0, 1.0, 1.0, -1.0, -1.0, -1.0, 1.0, 1.0])  # 0.25
+tree_std = std([1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0, 1.,0 0., 0.])  # 0.9682458365518543
+```
+
+**Instance Normalization.** Aggregation is performed independently for each tree and each channel.
+    
+```python3
+                [1.0,1.0]
+                 /     \
+        [1.0, -1.0]   *None*
+            /  \                 
+ [-1.0,-1.0]   [1.0,1.0]
+
+tree_mean = [mean([1.0, 1.0, -1.0, 1.0]), mean([1.0, -1.0, -1.0, 1.0])]  # [0.5, .0]
+tree_std = [std([1.0, 1.0, -1.0, 1.0]),  std([1.0, -1.0, -1.0, 1.0])]  # [0.8660254037844386, 1.0]
+```
+
+</details>
+
+# 📚 References
+
+- **Original Paper**: [Mou et al., 2016 - Convolutional Neural Networks over Tree Structures](https://www.aaai.org/ocs/index.php/AAAI/AAAI16/paper/view/12455)
+- **Inspired Implementation**: [TreeConvolution](https://github.com/RyanMarcus/TreeConvolution)
