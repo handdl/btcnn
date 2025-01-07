@@ -260,5 +260,5 @@ tree_std = [std([1.0, 1.0, -1.0, 1.0]),  std([1.0, -1.0, -1.0, 1.0])]  # [0.8660
 
 # 📚 References
 
-- **Original Paper**: [Mou et al., 2016 - Convolutional Neural Networks over Tree Structures](https://www.aaai.org/ocs/index.php/AAAI/AAAI16/paper/view/12455)
+- **Original Paper**: [Mou et al., 2015 - Convolutional Neural Networks over Tree Structures for Programming Language Processing](https://arxiv.org/pdf/1409.5718)
 - **Inspired Implementation**: [TreeConvolution](https://github.com/RyanMarcus/TreeConvolution)
